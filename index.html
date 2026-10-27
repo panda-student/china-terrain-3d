@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>中国三维地势</title>
+  <style>
+    :root {
+      --bg: #0a0f18;
+      --glass: rgba(15, 22, 34, .82);
+      --glass-hi: rgba(34, 45, 62, .95);
+      --line: rgba(255, 255, 255, .08);
+      --line-hi: rgba(255, 255, 255, .16);
+      --text: #e7edf4;
+      --muted: #8d9bad;
+      --dim: #637184;
+      --accent: #4ea1ff;
+      --accent-soft: rgba(78, 161, 255, .18);
+      --r: 12px;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; color: var(--text);
+      font: 13px/1.5 "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased; }
+    button { font: inherit; color: inherit; }
+    #app { position: fixed; inset: 0; }
+    #app canvas { display: block; cursor: grab; }
+    #app canvas.drag { cursor: grabbing; }
+
+    .glass { background: var(--glass); border: 1px solid var(--line); border-radius: var(--r);
+      backdrop-filter: blur(12px) saturate(1.2); box-shadow: var(--shadow); }
+    .icon { width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: 8px; flex: none;
+      background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+    .icon:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+    svg.i { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+    .scroll::-webkit-scrollbar { width: 6px; }
+    .scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 3px; }
+
+    /* ---- 左侧面板 ---- */
+    #panel { position: fixed; top: 16px; left: 16px; width: 272px; z-index: 5; display: flex; flex-direction: column;
+      max-height: calc(100vh - 72px); }
+    #phead { display: flex; align-items: center; gap: 10px; padding: 12px 10px 10px 16px; }
+    .brand { flex: 1; display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+    .logo { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg, #ffcf6b, #4ea1ff 60%, #234f96); }
+    #panel.min { width: auto; }
+    #panel.min .tabs, #panel.min .pane, #panel.min footer { display: none; }
+    #panel.min #pfold svg { transform: rotate(180deg); }
+    .tabs, .seg { display: flex; gap: 2px; padding: 3px; background: rgba(0, 0, 0, .28); border-radius: 9px; }
+    .tabs { margin: 0 12px; }
+    .tabs button, .seg button { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 5px 0;
+      border-radius: 7px; cursor: pointer; transition: background .15s, color .15s; }
+    .tabs button:hover, .seg button:hover { color: var(--text); }
+    .tabs button.on { background: var(--glass-hi); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+    .seg button { font-size: 12px; padding: 6px 0; }
+    .seg button.on { background: var(--accent); color: #fff; }
+    .pane { display: none; padding: 16px 16px 6px; overflow-y: auto; }
+    .pane.on { display: block; }
+    .field { margin-bottom: 16px; }
+    .fl { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+    .fl b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+    .chips { display: flex; gap: 6px; margin: -6px 0 12px; }
+    .chip { border: 1px solid var(--line-hi); background: transparent; color: var(--muted); border-radius: 999px;
+      padding: 3px 11px; font-size: 12px; cursor: pointer; transition: all .15s; }
+    .chip:hover { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+    .note { margin: 2px 0 12px; font-size: 12px; color: var(--dim); line-height: 1.6; }
+    #panel h4 { margin: 16px 0 4px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: 1px; }
+    #panel footer { padding: 9px 16px 12px; font-size: 11px; color: var(--dim); border-top: 1px solid var(--line); margin-top: 6px; }
+
+    /* 滑块 */
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; margin: 0;
+      background: transparent; cursor: pointer; --p: 50%; }
+    input[type=range]:focus { outline: none; }
+    input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px;
+      background: linear-gradient(to right, var(--accent) var(--p), rgba(255, 255, 255, .13) var(--p)); }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px;
+      border-radius: 50%; background: #fff; box-shadow: 0 0 0 4px var(--accent-soft), 0 1px 3px rgba(0, 0, 0, .4); transition: box-shadow .15s; }
+    input[type=range]:hover::-webkit-slider-thumb, input[type=range]:active::-webkit-slider-thumb { box-shadow: 0 0 0 7px var(--accent-soft), 0 1px 3px rgba(0, 0, 0, .4); }
+    input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .13); }
+    input[type=range]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+    input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; }
+
+    /* 开关行 */
+    .sw { display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin: 0 -8px; border-radius: 8px;
+      cursor: pointer; user-select: none; transition: background .15s; }
+    .sw:hover { background: rgba(255, 255, 255, .045); }
+    .sw span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sw em { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+    .sw input { display: none; }
+    .sw i { position: relative; flex: none; width: 30px; height: 18px; border-radius: 9px; background: rgba(255, 255, 255, .15); transition: background .2s; }
+    .sw i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .4); transition: transform .2s; }
+    .sw input:checked + i { background: var(--accent); }
+    .sw input:checked + i::after { transform: translateX(12px); }
+
+    /* ---- 右上信息卡(点击地名/图层时出现) ---- */
+    #info { position: fixed; top: 16px; right: 16px; width: 320px; z-index: 6; padding: 16px 18px;
+      max-height: calc(100vh - 140px); overflow-y: auto; opacity: 0; transform: translateX(14px); pointer-events: none;
+      transition: opacity .2s, transform .2s; }
+    #info.on { opacity: 1; transform: none; pointer-events: auto; }
+    #info .x { position: absolute; top: 10px; right: 10px; }
+    #info h2 { display: flex; align-items: center; gap: 9px; margin: 0 30px 10px 0; font-size: 16px; font-weight: 600; }
+    #info h2 em { width: 4px; height: 16px; border-radius: 2px; flex: none; }
+    #info p { margin: 0; color: #c3cfdc; line-height: 1.75; }
+    #info p small { display: block; margin-top: 6px; color: var(--dim); font-size: 12px; }
+    #info .lg { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+    #info .lg i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; margin-right: 8px; vertical-align: -1px; }
+
+    /* ---- 右下地图控件 ---- */
+    #mapctl { position: fixed; right: 16px; bottom: 56px; z-index: 5; display: flex; flex-direction: column; gap: 8px; }
+    #mapctl .stack { display: flex; flex-direction: column; overflow: hidden; }
+    #mapctl button { width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: transparent;
+      color: #c9d4e0; cursor: pointer; transition: background .15s, color .15s; }
+    #mapctl button + button { border-top: 1px solid var(--line); }
+    #mapctl button:hover { background: rgba(255, 255, 255, .09); color: #fff; }
+    #mapctl .txt { font-size: 12px; font-weight: 700; letter-spacing: .5px; }
+    #mapctl button.on { color: var(--accent); background: var(--accent-soft); }
+    #needle { width: 26px; height: 26px; }
+
+    /* ---- 预设视角浮层 ---- */
+    #viewbox { position: fixed; right: 64px; bottom: 56px; width: 220px; z-index: 7; padding: 14px 10px 10px;
+      max-height: calc(100vh - 72px); overflow-y: auto;
+      opacity: 0; transform: translateX(10px); pointer-events: none; transition: opacity .2s, transform .2s; }
+    #viewbox.on { opacity: 1; transform: none; pointer-events: auto; }
+    #viewbox .x { position: absolute; top: 8px; right: 8px; }
+    #viewbox h3 { margin: 0 6px 8px; font-size: 13px; font-weight: 600; }
+    #viewlist { display: flex; flex-direction: column; gap: 1px; }
+    #viewlist button { display: flex; align-items: center; justify-content: space-between; border: 0; background: transparent;
+      color: var(--text); padding: 7px 8px; border-radius: 7px; cursor: pointer; text-align: left; transition: background .15s; }
+    #viewlist button:hover { background: rgba(255, 255, 255, .07); }
+    #viewlist button.on { background: var(--accent-soft); color: #fff; }
+    #viewlist button.on kbd { border-color: var(--accent); }
+
+    /* ---- 左下状态栏 ---- */
+    #status { position: fixed; left: 16px; bottom: 16px; z-index: 4; display: flex; align-items: center; gap: 10px;
+      padding: 5px 12px; border-radius: 999px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    #status b { color: var(--text); font-weight: 500; }
+    #status .sep { width: 1px; height: 12px; background: var(--line-hi); }
+
+    /* ---- 剖面图卡片 ---- */
+    #chart-wrap { position: fixed; left: 304px; right: 68px; bottom: 56px; z-index: 4; padding: 10px 12px 8px 14px;
+      opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .2s, transform .2s; }
+    #chart-wrap.on { opacity: 1; transform: none; pointer-events: auto; }
+    .ch-head { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--muted); }
+    .ch-head .t { white-space: nowrap; color: var(--text); font-weight: 500; }
+    .ch-head .t small { color: var(--dim); font-weight: 400; margin-left: 6px; }
+    .ch-head input { flex: 1; min-width: 60px; }
+    #chart { width: 100%; height: 120px; display: block; margin-top: 4px; }
+
+    /* ---- 操作帮助 ---- */
+    #helpbox { position: fixed; right: 64px; bottom: 56px; width: 268px; z-index: 7; padding: 14px 16px 12px;
+      opacity: 0; transform: translateX(10px); pointer-events: none; transition: opacity .2s, transform .2s; }
+    #helpbox.on { opacity: 1; transform: none; pointer-events: auto; }
+    #helpbox .x { position: absolute; top: 8px; right: 8px; }
+    #helpbox h3 { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+    #helpbox dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; margin: 0; font-size: 12px; align-items: center; }
+    #helpbox dt { white-space: nowrap; }
+    #helpbox dd { margin: 0; color: var(--muted); }
+    kbd { display: inline-block; padding: 0 6px; border-radius: 5px; border: 1px solid var(--line-hi); border-bottom-width: 2px;
+      background: rgba(255, 255, 255, .05); font: 11px/18px inherit; color: var(--text); }
+
+    /* ---- 地名标注 ---- */
+    #labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+    .lb { position: absolute; left: 0; top: 0; padding: 1px 4px; font-size: 13px; line-height: 18px; white-space: nowrap;
+      pointer-events: auto; cursor: pointer; will-change: transform; transition: color .15s;
+      text-shadow: 0 0 3px rgba(0, 0, 0, .95), 0 0 7px rgba(0, 0, 0, .75), 0 1px 1px #000; }
+    .lb.prov { color: rgba(255, 255, 255, .8); font-size: 12px; letter-spacing: 1px; }
+    .lb.mtn { color: #ffc08a; }
+    .lb.mtn::before { content: "▲"; font-size: 8px; margin-right: 3px; vertical-align: 2px; }
+    .lb.land { color: #cdeaa3; font-weight: 600; font-size: 14px; letter-spacing: 2px; }
+    .lb.river { color: #7fd6ff; font-style: italic; }
+    .lb.sea { color: #a3c2ff; letter-spacing: 4px; }
+    .lb:hover { color: #fff; text-decoration: underline; text-underline-offset: 4px; }
+
+    /* ---- 加载 ---- */
+    #loading { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg);
+      color: var(--muted); font-size: 14px; transition: opacity .4s; }
+    .ld { display: flex; align-items: center; gap: 12px; }
+    .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-hi); border-top-color: var(--accent);
+      animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 720px) {
+      #chart-wrap { left: 16px; }
+      #info { width: calc(100vw - 32px); top: auto; bottom: 108px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="panel" class="glass">
+    <header id="phead">
+      <div class="brand"><span class="logo"></span>中国三维地势</div>
+      <button id="pfold" class="icon" title="收起 / 展开面板"><svg class="i" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6" /></svg></button>
+    </header>
+    <nav class="tabs">
+      <button data-tab="terrain" class="on">地形</button>
+      <button data-tab="layers">图层</button>
+      <button data-tab="names">地名</button>
+    </nav>
+
+    <section class="pane scroll on" data-pane="terrain">
+      <div class="field">
+        <div class="fl"><span>底色</span></div>
+        <div class="seg" id="modes"></div>
+      </div>
+      <div class="field">
+        <div class="fl"><span>陆地起伏夸张</span><b id="vLand"></b></div>
+        <input id="land" type="range" min="1" max="300" step="1" value="30" />
+      </div>
+      <div class="field">
+        <div class="fl"><span>海底深度夸张</span><b id="vSea"></b></div>
+        <input id="sea" type="range" min="1" max="60" step="1" value="10" />
+      </div>
+      <div class="chips">
+        <button id="rReal" class="chip" title="陆地、海底都设为 ×1:水平与垂直同一比例">真实比例 ×1</button>
+        <button id="rDef" class="chip">恢复默认</button>
+      </div>
+      <label class="sw" title="拉近时自动降低夸张倍数,避免高精度地形出现尖刺"><span>拉近时自动降低夸张</span><input id="tAuto" type="checkbox" /><i></i></label>
+      <p class="note">×1 就是真实比例:山会显得很矮,这才是地球真实的样子。</p>
+    </section>
+
+    <section class="pane scroll" data-pane="layers">
+      <label class="sw"><span>省界</span><input id="tProv" type="checkbox" checked /><i></i></label>
+      <label class="sw"><span>海水层</span><input id="tWater" type="checkbox" /><i></i></label>
+      <label class="sw"><span>纬线剖面图</span><input id="tProfile" type="checkbox" /><i></i></label>
+      <h4>地理分界线</h4>
+      <div id="lines"></div>
+    </section>
+
+    <section class="pane scroll" data-pane="names">
+      <div id="types"></div>
+      <p class="note">拉近镜头会显示更多地名;点击地名查看讲解。</p>
+    </section>
+
+    <footer>数据:NOAA ETOPO 2022(1′)· 边界:DataV,仅供学习演示</footer>
+  </div>
+
+  <div id="info" class="glass scroll"></div>
+  <div id="labels"></div>
+
+  <div id="chart-wrap" class="glass">
+    <div class="ch-head">
+      <span class="t" id="chart-title"></span>
+      <input id="lat" type="range" min="4" max="53" step="0.1" value="35" title="拖动改变剖面纬度" />
+      <button id="chartClose" class="icon" title="关闭剖面图"><svg class="i" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div id="mapctl">
+    <div class="glass stack">
+      <button id="zIn" title="放大"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></button>
+      <button id="zOut" title="缩小"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14" /></svg></button>
+    </div>
+    <div class="glass stack">
+      <button id="compass" title="指北针:点击回到正北朝上">
+        <svg id="needle" viewBox="0 0 24 24"><path d="M12 3l3.4 9H8.6z" fill="#ff5d5d" /><path d="M12 21l-3.4-9h6.8z" fill="#c9d4e0" opacity=".55" /></svg>
+      </button>
+    </div>
+    <div class="glass stack">
+      <button id="v3d" class="txt" title="切换俯视 / 斜视">2D</button>
+      <button id="views" title="预设视角(数字键 1–9)"><svg class="i" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><circle cx="12" cy="12" r="3" /></svg></button>
+      <button id="vHome" title="回到全景"><svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7" /><path d="M5 10v10h14V10" /></svg></button>
+    </div>
+    <div class="glass stack">
+      <button id="help" class="txt" title="操作说明">?</button>
+    </div>
+  </div>
+
+  <div id="viewbox" class="glass">
+    <button class="icon x" title="关闭"><svg class="i" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+    <h3>预设视角</h3>
+    <div id="viewlist"></div>
+  </div>
+
+  <div id="helpbox" class="glass">
+    <button class="icon x" title="关闭"><svg class="i" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+    <h3>怎么操作</h3>
+    <dl>
+      <dt><kbd>左键</kbd> 拖动</dt><dd>平移地图</dd>
+      <dt><kbd>右键</kbd> 拖动</dt><dd>旋转、调整俯仰</dd>
+      <dt><kbd>Ctrl</kbd>+<kbd>左键</kbd></dt><dd>同右键(触控板用)</dd>
+      <dt><kbd>滚轮</kbd></dt><dd>向光标处缩放</dd>
+      <dt><kbd>双击</kbd></dt><dd>飞到该处并拉近</dd>
+      <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>切换预设视角</dd>
+      <dt>指南针</dt><dd>点击回正北</dd>
+      <dt>触屏</dt><dd>单指平移,双指缩放旋转</dd>
+    </dl>
+  </div>
+
+  <div id="status" class="glass">
+    <span id="coord">移动鼠标查看经纬度与海拔</span>
+    <span class="sep"></span>
+    <span id="detail">细节:拉近后加载</span>
+  </div>
+
+  <div id="loading"><div class="ld"><span class="spin"></span>加载地形数据…</div></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

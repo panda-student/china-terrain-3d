@@ -1,0 +1,20 @@
+{
+  "name": "3d-map",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "convert": "node scripts/convert-dem.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "netcdfjs": "^4.0.0",
+    "three": "^0.186.1",
+    "vite": "^8.3.5"
+  },
+  "type": "module"
+}
